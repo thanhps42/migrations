@@ -8,7 +8,6 @@ import (
 	"path"
 	"path/filepath"
 	"regexp"
-	"runtime"
 	"sort"
 	"strconv"
 	"strings"
@@ -30,9 +29,8 @@ func (m *Migration) String() string {
 // from file with name like "1_initialize_db.go", where:
 // - 1 - migration version;
 // - initialize_db - comment.
-func Register(up, down func(DB) error) error {
-	_, file, _, _ := runtime.Caller(1)
-	version, err := extractVersion(file)
+func Register(f string, up, down func(DB) error) error {
+	version, err := extractVersion(f)
 	if err != nil {
 		return err
 	}
@@ -178,19 +176,17 @@ func down(db DB, migrations []Migration, oldVersion int64) (newVersion int64, er
 	return
 }
 
-func extractVersion(name string) (int64, error) {
-	base := filepath.Base(name)
-
-	if ext := filepath.Ext(base); ext != ".go" {
-		return 0, fmt.Errorf("can not extract version from %q", base)
+func extractVersion(f string) (int64, error) {
+	if ext := filepath.Ext(f); ext != ".sql" {
+		return 0, fmt.Errorf("can not extract version from %q", f)
 	}
 
-	idx := strings.IndexByte(base, '_')
+	idx := strings.IndexByte(f, '_')
 	if idx == -1 {
-		return 0, fmt.Errorf("can not extract version from %q", base)
+		return 0, fmt.Errorf("can not extract version from %q", f)
 	}
 
-	n, err := strconv.ParseInt(base[:idx], 10, 64)
+	n, err := strconv.ParseInt(f[:idx], 10, 64)
 	if err != nil {
 		return 0, err
 	}
@@ -244,19 +240,10 @@ func createMigrationFile(filename string) error {
 	return ioutil.WriteFile(filename, migrationTemplate, 0644)
 }
 
-var migrationTemplate = []byte(`package main
+var migrationTemplate = []byte(`
+-- +migrate Up
 
-import (
-	"github.com/go-pg/migrations"
-)
 
-func init() {
-	migrations.Register(func(db migrations.DB) error {
-		_, err := db.Exec("")
-		return err
-	}, func(db migrations.DB) error {
-		_, err := db.Exec("")
-		return err
-	})
-}
+-- +migrate Down
+
 `)
